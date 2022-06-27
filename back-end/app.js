@@ -79,18 +79,41 @@ app.get("/participants", async (req, res) => {
     }
 });
 
+
+//Mensages 
 app.post("/messages", async (req, res) => {
+    const body = req.body;
+    const user = req.headers;
 
-    //Valida o nome de acordo com o que foi definido em messagesSchema. Ser string e não vazio
-    const validation = messagesSchema.validate(req.body, { abortEarly: false})
+    try {
+       const online = await db.collection("mensages").findOne({name: user.user});
+        if(!online){
+            res.status(422);
+            return;
+        }
+        //Valida o nome de acordo com o que foi definido em messagesSchema. Ser string e não vazio
+        const validation = messagesSchema.validate(req.body, { abortEarly: false});
+        if(validation.error){
+            res.status(422).send(validation.error.details);
+            return;
+        }
+        await db.collection("mensages").insertOne({
+            from: user.user,
+            to: body.to,
+            text: body.text,
+            type: body.type,
+            time: dayjs().format("HH:mm:ss")
+        });
 
-    if(validation.error){
-        console.log(validation.error.details);
-        res.status(422).send("O nome não foi validado");
-        return;
-    }
-  
-});
+        res.status(201).send("Mensagem enviada com sucesso!");
+        client.close();
+
+     } catch (error) {
+         console.log(error);
+         res.status(500).send("Ocorreu um erro ao enviar as mensagens!");
+         client.close();
+     }   
+ });
 
 
 
