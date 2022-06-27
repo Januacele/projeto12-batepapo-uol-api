@@ -12,13 +12,23 @@ app.use(express.json());
 
 dotenv.config();
 
+//Validações
+
 const participantsSchema = joi.object({
     name: joi.string().required()
-})
+});
+
+const messagesSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.any().valid('message', 'private_message')
+});
 
 //Acesso ao mongo
+
+let db = null; 
 const client = new MongoClient(process.env.URL_CONNECT_MONGO);
-let db;
+
 //Acesso ao banco de dados test
 client.connect().then(() => {
     db = client.db("uol"); 
@@ -28,21 +38,35 @@ client.connect().then(() => {
 });
 
 
+// Participants 
+
 app.post("/participants", async (req, res) => {
     
-    const name = req.body;
-    const validation = participantsSchema.validate(name, { abortEarly: false})
+    //Recebe o nome do usuário no body da requisição
+    const participants = req.body;
+    //Validações 
+    const validation = participantsSchema.validate(participants, { abortEarly: false})
+    const isRegistered = await db.collection("participants").findOne({name : participants.name});
 
     if(validation.error){
         console.log(validation.error.details);
         res.status(422).send("O nome não foi validado");
         return;
     }
+    if(isRegistered){
+     res.status(409).send("Esse nome já existe! Por favor escolha outro.");
+     return;
+    }
     try {
-        await db.collection("participants").insertOne(name);
-        res.sendStatus(201);
+       await db.collection("participants").insertOne({
+           name: participants.name,
+           lastStatus: Date.now()
+        });
+        res.status(201).send("Usuário inserido com sucesso!");
+
     } catch (error) {
-        res.status(500).send("Usuário não cadastrado!");
+        res.status(500);
+        client.close();
     }   
 });
 
@@ -55,6 +79,19 @@ app.get("/participants", async (req, res) => {
     }
 });
 
+app.post("/messages", async (req, res) => {
+
+    //Valida o nome de acordo com o que foi definido em messagesSchema. Ser string e não vazio
+    const validation = messagesSchema.validate(req.body, { abortEarly: false})
+
+    if(validation.error){
+        console.log(validation.error.details);
+        res.status(422).send("O nome não foi validado");
+        return;
+    }
+  
+});
 
 
-app.listen(5001, console.log("Server ir running")); 
+
+app.listen(5000, console.log("Server ir running")); 
