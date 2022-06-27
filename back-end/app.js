@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import chalk from 'chalk';
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 import joi from 'joi';
 import dayjs from 'dayjs';
@@ -36,6 +36,10 @@ client.connect().then(() => {
 }).catch((error) => {
     console.log(chalk.red.bold("Falha na conexão com o banco de dados"), err)
 });
+
+
+
+
 
 
 // Participants 
@@ -92,7 +96,7 @@ app.post("/messages", async (req, res) => {
         return;
     }
 
-    const online = await db.collection("messages").findOne({name: user.user});
+    const online = await db.collection("participants").findOne({name: user.user});
     if(!online){
         res.status(422);
         return;
@@ -120,6 +124,10 @@ app.post("/messages", async (req, res) => {
      const user = req.header;
      const limit = parseInt(req.query.limit);
 
+     if(limit === undefined){
+        res.status(200).send(messagesList);
+    }
+
     try {
         const messagesList = await db.collection("messages").find({
             $or: [{from: user.user},
@@ -127,13 +135,8 @@ app.post("/messages", async (req, res) => {
                 {to: "Todos"}]
         }).toArray();
 
-        if(limit === undefined){
-            res.status(200).send(messagesList);
-        }
-
         res.status(200).send(messagesList.slice(messagesList.length - limit, messagesList.length));
        
-
     } catch (error) {
         console.log(error);
         res.status(500).send("Ocorreu um erro ao coletar as mensagens.");
@@ -142,4 +145,34 @@ app.post("/messages", async (req, res) => {
 });
 
 
+//Status
+app.post("/status", async (req, res) => {
+    const user = req.headers;
+
+    const participants = await db.collection("participants").find({}).toArray();
+
+    const online = participants.find((participant) => 
+    participant.name === user.user);
+
+    if(online === false){
+        res.status(404);
+        return;
+    }
+    try {
+        await db.collection("participants").updateOne(
+            { _id: new ObjectId(online._id) },
+            { $set: { lastStatus: Date.now() } }
+            );
+
+        res.status(200).send("Status atualizado!");
+       
+     } catch (error) {
+         console.log(error);
+         res.status(500).send("Ocorreu um erro ao postar os status!");
+     }   
+ });
+
+
+
+//Servidor 
 app.listen(5000, console.log("Server ir running")); 
