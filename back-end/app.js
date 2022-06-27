@@ -38,10 +38,6 @@ client.connect().then(() => {
 });
 
 
-
-
-
-
 // Participants 
 
 app.post("/participants", async (req, res) => {
@@ -73,6 +69,7 @@ app.post("/participants", async (req, res) => {
         client.close();
     }   
 });
+
 
 app.get("/participants", async (req, res) => {
     try {
@@ -119,6 +116,7 @@ app.post("/messages", async (req, res) => {
         
      }   
  });
+
 
  app.get("/messages", async (req, res) => {
      const user = req.header;
@@ -172,7 +170,23 @@ app.post("/status", async (req, res) => {
      }   
  });
 
+ //setInterval
+ setInterval(async () => {
+    const participants = db.collection("participants").find.toArray();
 
+    participants.forEach(async (participant) => {
+        if (Date.now() - participant.lastStatus > 10000){
+            await db.collection("participants").deleteOne({_id: participant._id});
+            await db.collection("messages").insertOne({
+                from: participant.nome,
+                to: "Todos",
+                text: "sai da sala...",
+                type: "status",
+                time: dayjs().format("HH:mm:ss"),
+            });
+        }
+    });
+}, 15000);
 
 //Servidor 
 app.listen(5000, console.log("Server ir running")); 
