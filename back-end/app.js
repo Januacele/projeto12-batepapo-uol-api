@@ -1,4 +1,4 @@
-import express, {json} from "express";
+import express from "express";
 import cors from "cors";
 import chalk from 'chalk';
 import { MongoClient } from "mongodb";
@@ -21,7 +21,7 @@ const participantsSchema = joi.object({
 const messagesSchema = joi.object({
     to: joi.string().required(),
     text: joi.string().required(),
-    type: joi.any().valid('message', 'private_message')
+    type: joi.valid('message', 'private_message').required()
 });
 
 //Acesso ao mongo
@@ -85,19 +85,21 @@ app.post("/messages", async (req, res) => {
     const body = req.body;
     const user = req.headers;
 
+    //Valida o nome de acordo com o que foi definido em messagesSchema. Ser string e não vazio
+    const validation = messagesSchema.validate(body, { abortEarly: false});
+    if(validation.error){
+        res.status(422).send(validation.error.details);
+        return;
+    }
+
+    const online = await db.collection("messages").findOne({name: user.user});
+    if(!online){
+        res.status(422);
+        return;
+    }
+   
     try {
-       const online = await db.collection("mensages").findOne({name: user.user});
-        if(!online){
-            res.status(422);
-            return;
-        }
-        //Valida o nome de acordo com o que foi definido em messagesSchema. Ser string e não vazio
-        const validation = messagesSchema.validate(req.body, { abortEarly: false});
-        if(validation.error){
-            res.status(422).send(validation.error.details);
-            return;
-        }
-        await db.collection("mensages").insertOne({
+        await db.collection("messages").insertOne({
             from: user.user,
             to: body.to,
             text: body.text,
@@ -106,15 +108,38 @@ app.post("/messages", async (req, res) => {
         });
 
         res.status(201).send("Mensagem enviada com sucesso!");
-        client.close();
-
+       
      } catch (error) {
          console.log(error);
          res.status(500).send("Ocorreu um erro ao enviar as mensagens!");
-         client.close();
+        
      }   
  });
 
+ app.get("/messages", async (req, res) => {
+     const user = req.header;
+     const limit = parseInt(req.query.limit);
+
+    try {
+        const messagesList = await db.collection("messages").find({
+            $or: [{from: user.user},
+                {to: user.user},
+                {to: "Todos"}]
+        }).toArray();
+
+        if(limit === undefined){
+            res.status(200).send(messagesList);
+        }
+
+        res.status(200).send(messagesList.slice(messagesList.length - limit, messagesList.length));
+       
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).send("Ocorreu um erro ao coletar as mensagens.");
+       
+    }
+});
 
 
 app.listen(5000, console.log("Server ir running")); 
