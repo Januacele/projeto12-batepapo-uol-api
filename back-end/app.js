@@ -1,4 +1,4 @@
-import express from "express";
+import express, { json } from "express";
 import cors from "cors";
 import chalk from 'chalk';
 import { MongoClient, ObjectId } from "mongodb";
@@ -8,7 +8,7 @@ import dayjs from 'dayjs';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(json());
 
 dotenv.config();
 
@@ -36,6 +36,7 @@ client.connect().then(() => {
 }).catch((error) => {
     console.log(chalk.red.bold("Falha na conexão com o banco de dados"), err)
 });
+
 
 
 // Participants 
@@ -107,7 +108,7 @@ app.post("/messages", async (req, res) => {
             type: body.type,
             time: dayjs().format("HH:mm:ss")
         });
-
+        
         res.status(201).send("Mensagem enviada com sucesso!");
        
      } catch (error) {
@@ -144,6 +145,7 @@ app.post("/messages", async (req, res) => {
 
 
 //Status
+
 app.post("/status", async (req, res) => {
     const user = req.headers;
 
@@ -170,23 +172,37 @@ app.post("/status", async (req, res) => {
      }   
  });
 
- //setInterval
- setInterval(async () => {
-    const participants = db.collection("participants").find.toArray();
 
-    participants.forEach(async (participant) => {
-        if (Date.now() - participant.lastStatus > 10000){
-            await db.collection("participants").deleteOne({_id: participant._id});
-            await db.collection("messages").insertOne({
-                from: participant.nome,
-                to: "Todos",
-                text: "sai da sala...",
-                type: "status",
-                time: dayjs().format("HH:mm:ss"),
-            });
-        }
+ function removerInativos() {
+    const promise = db.collection("participantes").find({}).toArray();
+
+    promise.then(participantes => {
+        participantes.forEach(async p => {
+            if (Date.now() - p.lastStatus > 10) {
+               
+                let now = dayjs();
+                now = now.format('HH:mm:ss');
+
+                const novaMensagem = {
+                    from: p.name,
+                    to: 'Todos',
+                    text: 'sai da sala...',
+                    type: 'status',
+                    time: now
+                };
+
+                try {
+                    await db.collection("participants").deleteOne({ _id: p._id });
+                    await db.collection("messages").insertOne(novaMensagem);
+                } catch (err) {
+                    console.log(err);
+                }
+            }
+        });
     });
-}, 15000);
+}
+
+setInterval(removerInativos, 15000);
 
 //Servidor 
 app.listen(5000, console.log("Server ir running")); 
